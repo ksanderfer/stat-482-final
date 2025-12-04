@@ -1,5 +1,6 @@
 import numpy as np
-import sklearn as sk
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
 from generate_data import construct_sample_cov
 
 def flatten_cov(mat):
@@ -7,7 +8,8 @@ def flatten_cov(mat):
     return mat[idx]
 
 # Make our data
-data = construct_sample_cov(num_matrices=10000)
+n = 10  # number of assets
+data = construct_sample_cov(num_matrices=10000, n=n)
 
 # Train/test split
 split_idx = int(0.8 * len(data))
@@ -26,7 +28,7 @@ X = np.array(X)
 y = np.array(y)
 
 # Train model
-model = sk.linear_model.LinearRegression()
+model = LinearRegression()
 model.fit(X, y)
 
 print('model trained')
@@ -50,7 +52,7 @@ y_pred = model.predict(X_test)
 
 # check MSE
 
-mse = sk.metrics.mean_squared_error(y_test, y_pred)
+mse = mean_squared_error(y_test, y_pred)
 print("MSE on covariance entries:", mse)
 
 def unflatten(v, n):
@@ -59,8 +61,6 @@ def unflatten(v, n):
     M[idx] = v
     M[(idx[1], idx[0])] = v
     return M
-
-n = true_cov.shape[0]   # number of assets
 
 fro_errors = []
 for pred_vec, true_vec in zip(y_pred, y_test):
