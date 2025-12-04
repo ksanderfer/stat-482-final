@@ -61,17 +61,17 @@ def backtest_portfolio (
 def calculate_portfolio_performance(portfolio_returns: np.ndarray) -> dict:
     
     annualization_factor = 252  # Trading days in a year
-    mean_return = np.mean(portfolio_returns) * annualization_factor
+
+    total_log_return = np.sum(portfolio_returns)
+    annualized_log_return = total_log_return * (annualization_factor / len(portfolio_returns))
     volatility = np.std(portfolio_returns) * np.sqrt(annualization_factor)
-    sharpe_ratio = mean_return / volatility if volatility > 0 else 0
-    cumulative_returns = np.cumprod(1 + portfolio_returns) - 1
-    total_return = cumulative_returns[-1]
+    sharpe_ratio = annualized_log_return / volatility if volatility > 0 else 0
     
     return {
-        'Annualized Return': mean_return,
+        'Annualized Return': np.exp(annualized_log_return) - 1,
+        'Total Return': np.exp(total_log_return) - 1,
         'Annualized Volatility': volatility,
         'Sharpe Ratio': sharpe_ratio,
-        'Total Return': total_return,
     }
 
 # Evaluate an estimator on return data
@@ -83,7 +83,7 @@ def evaluate(returns: np.ndarray, estimator: Callable[[np.ndarray], np.ndarray])
 if __name__ == "__main__":
    
     # Some tickers
-    tickers = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'NVDA', 'TSLA', 'BRK-B', 'JPM', 'V']
+    tickers = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'NVDA', 'TSLA', 'BRK-B', 'JPM', 'V', 'JNJ', 'WMT', 'PG', 'UNH', 'HD', 'DIS', 'MA', 'PYPL', 'BAC', 'VZ']
     
     # Fetch historical data
     end_date = datetime.now()
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     returns = []
     for ticker in tickers:
         prices = data['Close', ticker]
-        rets = prices.pct_change().dropna().values
+        rets = np.diff(np.log(np.array(prices.values)))
         returns.append(rets)
     returns = np.column_stack(returns)
 
