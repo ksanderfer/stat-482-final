@@ -1,4 +1,14 @@
 import numpy as np
+from generate_data import construct_dataset
+from sklearn.covariance import LedoitWolf
+
+# Get sample covariance matrix from returns
+def sample_covariance (returns):
+   return np.cov(returns, rowvar=False)
+
+# Apply Ledoit-Wolf shrinkage to covariance matrix
+def ledoit_wolf_shrinkage(cov):
+    return LedoitWolf().fit(cov).covariance_
 
 # Flatten an NxN covariance matrix to a vector of size N(N+1)/2 containing upper triangular elements
 def flatten_cov(M):
@@ -24,3 +34,10 @@ def enforce_psd(M, eps=1e-6):
 # Compute Frobenius norm error between two matrices
 def frobenius_error(M1, M2):
     return np.linalg.norm(M1.flatten() - M2.flatten())
+
+# Builds dataset for training regression models for covariance estimation
+def build_training_dataset(num_matrices=1000, n=10, T=252, seed=67):
+    dataset = construct_dataset(noise_factor=10, n=n, num_matrices=num_matrices, seed=seed)
+    X = [r.flatten() for _, _, r in dataset]
+    y = [flatten_cov(c) for c, _, _ in dataset]
+    return np.array(X), np.array(y)

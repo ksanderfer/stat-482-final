@@ -1,87 +1,75 @@
 import numpy as np
+from util import flatten_cov, unflatten_cov, enforce_psd, frobenius_error, build_training_dataset, sample_covariance, ledoit_wolf_shrinkage
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error
-from generate_data import construct_sample_cov
+from sklearn.model_selection import train_test_split
+from sklearn.covariance import LedoitWolf
+import pickle
 
-def flatten_cov(mat):
-    idx = np.triu_indices_from(mat)
-    return mat[idx]
+# Create covariance estimator function using trained sklearn model and PSD enforcement
+def cov_estimator(model, returns):
+    pred_vec = model.predict(returns.reshape(1, -1))[0]
+    M = unflatten_cov(pred_vec, n=10)
+    M_psd = enforce_psd(M)
+    return M_psd
 
-# Make our data
-n = 10  # number of assets
-data = construct_sample_cov(num_matrices=10000, n=n)
+def main ():
+    # Build dataset
+    X, y = build_training_dataset(num_matrices=2000, n=10, T=252)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=0
+    )
 
-# Train/test split
-split_idx = int(0.8 * len(data))
-train_data = data[:split_idx]
-test_data  = data[split_idx:]
+    # Build models
+    rf = RandomForestRegressor(
+        n_estimators=200,
+        max_depth=5,
+        n_jobs=-1,
+        random_state=0,
+        verbose=False
+    )
+    lr = LinearRegression()
 
-# Build regression matrices
-X = []
-y = []
+    # Fit models
+    rf.fit(X_train, y_train)
+    lr.fit(X_train, y_train)
+    print("Trained models on", X_train.shape[0], "samples.")
 
-for true_cov, sample_cov in train_data:
-    X.append(flatten_cov(sample_cov))
-    y.append(flatten_cov(true_cov))
+    # Validate models on test dataset
+    y_pred = rf.predict(X_test)
+    error = np.mean([frobenius_error(p, t) for p, t in zip(y_pred, y_test)])
+    print("Mean Frobenius Error (Random Forest):", error)
 
-X = np.array(X)
-y = np.array(y)
+    y_pred = lr.predict(X_test)
+    error = np.mean([frobenius_error(p, t) for p, t in zip(y_pred, y_test)])
+    print("Mean Frobenius Error (Linear Regression):", error)
 
-# Train model
-model = LinearRegression()
-model.fit(X, y)
+    # Evaluate models using cov_estimator
+    y_pred_psd = [flatten_cov(cov_estimator(rf, returns)) for returns in X_test]
+    error = np.mean([frobenius_error(pred, test) for pred, test in zip(y_pred_psd, y_test)])
+    print("Mean Frobenius Error (RF w/ PSD):", error)
 
-print('model trained')
-print("X shape:", X.shape)
-print("y shape:", y.shape)
+    y_pred_psd = [flatten_cov(cov_estimator(lr, returns)) for returns in X_test]
+    error = np.mean([frobenius_error(pred, test) for pred, test in zip(y_pred_psd, y_test)])
+    print("Mean Frobenius Error (Linear Regression w/ PSD):", error)
 
+    # Compare against sample covariance and Ledoit-Wolf shrinkage
+    y_pred = [flatten_cov(sample_covariance(returns.reshape(-1, 10))) for returns in X_test]
+    error = np.mean([frobenius_error(pred, test) for pred, test in zip(y_pred, y_test)])
+    print("Mean Frobenius Error (Sample Covariance):", error)
 
-X_test = []
-y_test = []
+    y_pred = [flatten_cov(ledoit_wolf_shrinkage(returns.reshape(-1, 10))) for returns in X_test]
+    error = np.mean([frobenius_error(pred, test) for pred, test in zip(y_pred, y_test)])
+    print("Mean Frobenius Error (Ledoit-Wolf Shrinkage):", error)
 
-# Test model
+    # Save models
+    with open('models/random_forest.pkl', 'wb') as f:
+        pickle.dump(rf, f)
+    print("Saved Random Forest Model to models/random_forest.pkl")
 
-for true_cov, sample_cov in test_data:
-    X_test.append(flatten_cov(sample_cov))
-    y_test.append(flatten_cov(true_cov))
+    with open('models/linear_regression.pkl', 'wb') as f:
+        pickle.dump(lr, f)
+    print("Saved Linear Regression Model to models/linear_regression.pkl")
 
-X_test = np.array(X_test)
-y_test = np.array(y_test)
-
-y_pred = model.predict(X_test)
-
-# check MSE
-
-mse = mean_squared_error(y_test, y_pred)
-print("MSE on covariance entries:", mse)
-
-def unflatten(v, n):
-    M = np.zeros((n, n))
-    idx = np.triu_indices(n)
-    M[idx] = v
-    M[(idx[1], idx[0])] = v
-    return M
-
-fro_errors = []
-for pred_vec, true_vec in zip(y_pred, y_test):
-    pred = unflatten(pred_vec, n)
-    true = unflatten(true_vec, n)
-    fro_errors.append(np.linalg.norm(pred - true, 'fro'))
-
-fro_mean = np.mean(fro_errors)
-print("Mean Frobenius norm error:", fro_mean)
-
-# check if outperforms sample cov
-
-sample_errors = []
-learned_errors = []
-
-for (true_cov, sample_cov), pred_vec in zip(test_data, y_pred):
-    pred_cov = unflatten(pred_vec, n)
-
-    sample_errors.append(np.linalg.norm(sample_cov - true_cov, 'fro'))
-    learned_errors.append(np.linalg.norm(pred_cov - true_cov, 'fro'))
-
-print("Sample cov Frobenius error:", np.mean(sample_errors))
-print("Learned cov Frobenius error:", np.mean(learned_errors))
-
+if __name__ == "__main__":
+    main()
