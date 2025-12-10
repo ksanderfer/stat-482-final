@@ -54,12 +54,3 @@ def construct_dataset (noise_factor, n, num_matrices=10000, seed=67):
         returns = generate_returns(noisy)
         simulated.append((mat, np.linalg.cholesky(mat), returns))   # (true_cov, cholesky, returns)
     return simulated
-
-# #generates true matrices, simulated Wishart matrices, does GBM, and gets corresponding sample covariance matrices
-# def construct_sample_cov(noise_factor=10, n=10, num_matrices=10000, seed=67):
-#     simulated = construct_data(noise_factor, n, num_matrices, seed)
-#     sample_mats = []
-#     for true_cov, noisy_cov in simulated:
-#         sample_cov = np.cov(generate_returns(noisy_cov), rowvar=False)
-#         sample_mats.append([true_cov, sample_cov])
-#     return sample_mats
