@@ -1,8 +1,16 @@
+import torch
+import pickle
 import numpy as np
-from scipy.optimize import minimize
-from typing import Callable
 import yfinance as yf
+from typing import Callable
+from scipy.optimize import minimize
 from datetime import datetime, timedelta
+from neural_network import predict_covariance, CovarianceNet
+from util import sample_covariance, ledoit_wolf_shrinkage
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
+from regression import cov_estimator
+import matplotlib.pyplot as plt
 
 # Minimum variance portfolio weights
 def minimum_variance_portfolio(cov_matrix: np.ndarray) -> np.ndarray:
@@ -83,7 +91,7 @@ def evaluate(returns: np.ndarray, estimator: Callable[[np.ndarray], np.ndarray])
 if __name__ == "__main__":
    
     # Some tickers
-    tickers = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'NVDA', 'TSLA', 'BRK-B', 'JPM', 'V', 'JNJ', 'WMT', 'PG', 'UNH', 'HD', 'DIS', 'MA', 'PYPL', 'BAC', 'VZ']
+    tickers = ['JNJ', 'PG', 'KO', 'MSFT', 'AAPL', 'ADBE', 'NVDA', 'TSLA', 'XLE', 'GLD']
     
     # Fetch historical data
     end_date = datetime.now()
@@ -101,25 +109,71 @@ if __name__ == "__main__":
     returns = np.column_stack(returns)
 
     # Define covariance estimators
-    def sample_covariance (returns):
-        return np.cov(returns.T)
+    model = CovarianceNet(n_assets=10)
+    model.load_state_dict(torch.load('models/neural_network.pt'))
+    def neural_network (returns):
+        return predict_covariance(model, returns.T)
+
+    with open('models/random_forest.pkl', 'rb') as f:
+        rf = pickle.load(f)
+    if not isinstance(rf, RandomForestRegressor):
+            raise TypeError("Loaded object is not a RandomForestRegressor.")
+    def rf_model (returns):
+        return cov_estimator(rf, returns)
     
-    def identity_shrinkage(returns):
-        sample_cov = sample_covariance(returns)
-        target = np.eye(len(sample_cov)) * np.mean(np.diag(sample_cov))
-        alpha = 0.25
-        return alpha * sample_cov + (1 - alpha) * target
+    with open('models/linear_regression.pkl', 'rb') as f:
+        lr = pickle.load(f)
+    if not isinstance(lr, LinearRegression):
+            raise TypeError("Loaded object is not a LinearRegression.")
+    def lr_model (returns):
+        return cov_estimator(lr, returns)
     
     # Compare strategies
     estimators = {
         'Sample Covariance': sample_covariance,
-        'Identity Shrinkage': identity_shrinkage
+        'Ledoit-Wolf Shrinkage': ledoit_wolf_shrinkage,
+        'Random Forest': rf_model,
+        'Neural Network': neural_network,
+        'Linear Regression': lr_model
     }
     
+    performances = []
     for (name, estimator) in estimators.items():
         print(f"Evaluating estimator: {name}")
         performance = evaluate(returns, estimator)
         for metric , value in performance.items():
             print(f"  {metric}: {value:.4f}")
         print()
+        performances.append((name, performance))
+
+    # Plot results
+    plt.style.use('seaborn-v0_8')
+
+    labels = [name for name, _ in performances]
+    annualized_returns = [perf['Annualized Return'] for _, perf in performances]
+    plt.bar(labels, annualized_returns)
+    plt.ylabel('Annualized Return')
+    plt.title('Portfolio Returns by Covariance Estimator')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig('plots/portfolio_returns.png')
+
+    annualized_volatility = [perf['Annualized Volatility'] for _, perf in performances]
+    plt.clf()
+    plt.bar(labels, annualized_volatility)
+    plt.ylabel('Variance')
+    plt.title('Portfolio Volatility by Covariance Estimator')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig('plots/portfolio_volatility.png')
+
+    sharpe_ratio = [perf['Sharpe Ratio'] for _, perf in performances]
+    plt.clf()
+    plt.bar(labels, sharpe_ratio)
+    plt.ylabel('Sharpe Ratio')
+    plt.title('Portfolio Sharpe Ratio by Covariance Estimator')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig('plots/portfolio_sharpe_ratio.png')
+        
         
