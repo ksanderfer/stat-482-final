@@ -7,8 +7,8 @@ def sample_covariance (returns):
    return np.cov(returns, rowvar=False)
 
 # Apply Ledoit-Wolf shrinkage to covariance matrix
-def ledoit_wolf_shrinkage(cov):
-    return LedoitWolf().fit(cov).covariance_
+def ledoit_wolf_shrinkage (returns):
+    return LedoitWolf().fit(sample_covariance(returns)).covariance_
 
 # Flatten an NxN covariance matrix to a vector of size N(N+1)/2 containing upper triangular elements
 def flatten_cov(M):
