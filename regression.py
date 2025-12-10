@@ -5,6 +5,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.covariance import LedoitWolf
 import pickle
+import os
 
 # Create covariance estimator function using trained sklearn model and PSD enforcement
 def cov_estimator(model, returns):
@@ -63,6 +64,9 @@ def main ():
     print("Mean Frobenius Error (Ledoit-Wolf Shrinkage):", error)
 
     # Save models
+    if not os.path.exists('models'):
+        os.makedirs('models')
+
     with open('models/random_forest.pkl', 'wb') as f:
         pickle.dump(rf, f)
     print("Saved Random Forest Model to models/random_forest.pkl")

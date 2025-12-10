@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from util import construct_dataset
+import os
 
 # Enforce positive semi-definiteness on a matrix
 def enforce_psd_torch (M, eps=1e-6):
@@ -192,5 +193,7 @@ if __name__ == "__main__":
     print("Mean Frobenius Error:", np.mean(errors))
     
     # Save model
+    if not os.path.exists('models'):
+        os.makedirs('models')
     torch.save(model.state_dict(), 'models/neural_network.pt')
     print("Model saved to models/neural_network.pt")

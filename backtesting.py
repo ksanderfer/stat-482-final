@@ -1,3 +1,4 @@
+import os
 import torch
 import pickle
 import numpy as np
@@ -147,6 +148,8 @@ if __name__ == "__main__":
         performances.append((name, performance))
 
     # Plot results
+    if not os.path.exists('plots'):
+        os.makedirs('plots')
     plt.style.use('seaborn-v0_8')
 
     labels = [name for name, _ in performances]
